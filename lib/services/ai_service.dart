@@ -40,7 +40,7 @@ class AiService {
   }) async {
     // 1. 使用するモデルの指定（軽量・高速な gemini-2.5-flash を推奨）
     final model = GenerativeModel(
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       apiKey: _apiKey,
       // 2. バージョン互換性に基づき `generationConfig` を指定
       generationConfig: GenerationConfig(

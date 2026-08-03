@@ -57,6 +57,14 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
       
       // 足し算か引き算かをランダムで決定
       bool isAddition = random.nextBool();
+
+      // 🔥【修正】引き算のときは、必ず num1 が大きくなるように入れ替える
+      if (!isAddition && num1 < num2) {
+        int temp = num1;
+        num1 = num2;
+        num2 = temp;
+      }
+
       String questionText = isAddition ? '$num1 + $num2 = ?' : '$num1 - $num2 = ?';
       int correctAnswerVal = isAddition ? (num1 + num2) : (num1 - num2);
 
