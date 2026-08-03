@@ -1,0 +1,57 @@
+name: Flutter Build APK & AAB
+
+# mainブランチにコードが「push」された時に自動実行する
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    # GitHub側が用意してくれる強力なLinuxサーバー(Ubuntu)を使用
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. リポジトリのコードをチェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Java環境のセットアップ（Androidビルドに必要）
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # 3. Flutter環境のセットアップ
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x' # 最新の安定版を自動使用
+          channel: 'stable'
+          cache: true # キャッシュを有効にして2回目以降を高速化
+
+      # 4. パッケージの依存関係を解決
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 5. APK（実機テスト用）のビルド
+      - name: Build APK
+        run: flutter build apk --release
+
+      # 6. AAB（Google Playストア提出用）のビルド
+      - name: Build AppBundle (AAB)
+        run: flutter build appbundle --release
+
+      # 7. ビルドされた成果物（Artifacts）をGitHub上に保存し、ダウンロード可能にする
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
