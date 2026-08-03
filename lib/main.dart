@@ -182,7 +182,8 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('エラー'),
-          content: const Text('クイズの生成に失敗しました。APIキーの設定や通信環境を確認してください。\n※計算専門マラソンは通信なしで遊べます。'),
+          //content: const Text('クイズの生成に失敗しました。APIキーの設定や通信環境を確認してください。\n※計算専門マラソンは通信なしで遊べます。'),
+          content: const Text('{e.toString()}'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
