@@ -26,7 +26,7 @@ class QuizApp extends StatelessWidget {
 }
 
 // =================================================================
-// 1. トップ画面
+// 1. トップ画面（ブラッシュアップ版）
 // =================================================================
 class QuizTopScreen extends StatefulWidget {
   const QuizTopScreen({super.key});
@@ -39,16 +39,17 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
   final _aiService = AiService();
   final _textController = TextEditingController();
   
-  String _selectedTheme = '国語';
-  String _selectedDifficulty = '普通';
-  bool _isLoading = false;
+  // 各ゲーム独立した設定変数
+  String _aiDifficulty = '普通';
+  String _mathDifficulty = '普通';
 
-  // 🔥 難易度ごとの最高記録を保持する変数
+  // 計算マラソン用のハイスコア
   int _highScoreEasy = 0;
   int _highScoreNormal = 0;
   int _highScoreHard = 0;
 
-  final List<String> _subjects = ['国語', '算数', '理科', '社会', '英語'];
+  bool _isLoading = false;
+
   final List<String> _difficulties = ['簡単', '普通', '難しい'];
 
   @override
@@ -57,7 +58,6 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
     _loadHighScores(); 
   }
 
-  // 🔥 各難易度のハイスコアを個別にロードする
   Future<void> _loadHighScores() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -67,17 +67,11 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
     });
   }
 
-  // 現在選択されている難易度のハイスコアを返すヘルパー
-  int _getCurrentDifficultyScore() {
-    if (_selectedDifficulty == '簡単') return _highScoreEasy;
-    if (_selectedDifficulty == '難しい') return _highScoreHard;
-    return _highScoreNormal; // デフォルトは「普通」
-  }
-
+  // 🔥 計算専門マラソン起動
   void _startMathMarathon() {
     List<QuizModel> initialQuizzes = [];
     for (int i = 0; i < 3; i++) {
-      initialQuizzes.add(_generateSingleMathQuiz(_selectedDifficulty));
+      initialQuizzes.add(_generateSingleMathQuiz(_mathDifficulty));
     }
 
     Navigator.push(
@@ -86,10 +80,10 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
         builder: (context) => QuizPlayScreen(
           quizList: initialQuizzes,
           isMathMarathon: true, 
-          marathonDifficulty: _selectedDifficulty,
+          marathonDifficulty: _mathDifficulty,
         ),
       ),
-    ).then((_) => _loadHighScores()); // 画面から戻ってきたらスコアを再読み込み
+    ).then((_) => _loadHighScores());
   }
 
   static QuizModel _generateSingleMathQuiz(String difficulty) {
@@ -141,10 +135,11 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
     );
   }
 
+  // 🔥 AIクイズ起動
   Future<void> _startAiQuiz() async {
     final finalTheme = _textController.text.trim().isNotEmpty 
         ? _textController.text.trim() 
-        : _selectedTheme;
+        : '総合問題'; // 何も入力がない場合は総合問題にする
 
     setState(() {
       _isLoading = true;
@@ -153,7 +148,7 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
     try {
       final quizzes = await _aiService.generateAIQuizzes(
         theme: finalTheme,
-        difficulty: _selectedDifficulty,
+        difficulty: _aiDifficulty,
       );
 
       if (!mounted) return;
@@ -168,7 +163,7 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
           builder: (context) => QuizPlayScreen(
             quizList: quizzes,
             isMathMarathon: false,
-            marathonDifficulty: _selectedDifficulty,
+            marathonDifficulty: _aiDifficulty,
           ),
         ),
       );
@@ -178,17 +173,16 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
       setState(() {
         _isLoading = false;
       });
-    showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('APIエラーが発生しました'),
-      // 👇 必ず末尾に「()」をつけてメソッドを実行してください
-      content: Text('【エラー内容】\n${e.toString()}\n\nAPIキーの設定や通信環境を確認してください。'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('OK'),
-        )
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('通信エラー'),
+          content: Text('【詳細】\n$e\n\n通信環境を確認してください。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            )
           ],
         ),
       );
@@ -221,153 +215,182 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('AIクイズ＆計算マラソン'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('AIクイズ ＆ 計算マラソン'), 
+        centerTitle: true,
+        backgroundColor: Colors.teal.shade50,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('【通信なしで遊ぶ・難易度連動】', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-            const SizedBox(height: 8),
             
-            // 🏆 選択中難易度のハイスコア表示パネル
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.emoji_events, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'マラソン [$_selectedDifficulty] 最高記録: ${_getCurrentDifficultyScore()} 問連続正解！',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: _startMathMarathon,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.shade700,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.calculate),
-                label: Text('計算マラソン ($_selectedDifficulty) スタート！', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ),
-            ),
-            
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20.0),
-              child: Divider(),
-            ),
-
-            const Text('【設定 ＆ AIクイズ】', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-            const SizedBox(height: 12),
-            
-            const Text('⚡ 計算の桁数 / クイズの難易度を選択', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            
-            // 難易度チップ切り替え（切り替えると上のスコア表示も自動で変わります）
-            Row(
-              children: _difficulties.map((diff) {
-                String sub = diff == '簡単' ? ' (1桁)' : diff == '普通' ? ' (2桁)' : ' (3桁)';
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: ChoiceChip(
-                    label: Text(diff + sub),
-                    selected: _selectedDifficulty == diff,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _selectedDifficulty = diff;
-                        });
-                      }
-                    },
-                  ),
-                );
-              }).toList(),
-            ),
-            
-            // 📊 寄り道要素：全難易度のスコア一覧（スコアボード）
-            const SizedBox(height: 12),
+            // ==========================================
+            // 上段：AIクイズセクション
+            // ==========================================
             Card(
-              color: Colors.grey.shade50,
+              elevation: 2,
+              color: Colors.teal.shade50.withValues(alpha: 0.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('簡単: $_highScoreEasy問', style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold)),
-                    Text('普通: $_highScoreNormal問', style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold)),
-                    Text('難しい: $_highScoreHard問', style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Icon(Icons.psychology, color: Colors.teal.shade700),
+                        const SizedBox(width: 8),
+                        Text('1. AIカスタムクイズ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade900)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _textController,
+                      decoration: const InputDecoration(
+                        labelText: 'クイズのお題を入力してください',
+                        hintText: '例：世界の歴史、日本の都道府県、サッカーのルール',
+                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('難易度を選択', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: _difficulties.map((diff) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ChoiceChip(
+                            label: Text(diff),
+                            selected: _aiDifficulty == diff,
+                            selectedColor: Colors.teal.shade200,
+                            onSelected: (selected) {
+                              if (selected) setState(() => _aiDifficulty = diff);
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _startAiQuiz,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('AIクイズを生成してスタート！', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
             
-            const SizedBox(height: 24),
-            const Text('1. AIクイズのお題を選ぼう', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8.0,
-              children: _subjects.map((subject) {
-                final isSelected = _selectedTheme == subject && _textController.text.isEmpty;
-                return ChoiceChip(
-                  label: Text(subject),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    if (selected) {
-                      setState(() {
-                        _selectedTheme = subject;
-                        _textController.clear();
-                      });
-                    }
-                  },
-                );
-              }).toList(),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24.0),
+              child: Divider(),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _textController,
-              decoration: const InputDecoration(
-                labelText: '自由にお題を入力（例：世界の歴史、サッカーのルール）',
-                border: OutlineInputBorder(),
-                hintText: 'ここに入力すると上の選択より優先されます',
-              ),
-              onChanged: (value) {
-                setState(() {});
-              },
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _startAiQuiz,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+
+            // ==========================================
+            // 下段：計算マラソンセクション
+            // ==========================================
+            Card(
+              elevation: 2,
+              color: Colors.orange.shade50.withValues(alpha: 0.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.calculate, color: Colors.orange.shade800),
+                        const SizedBox(width: 8),
+                        Text('2. 無限計算マラソン', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text('※通信なしで今すぐ遊べます。正解するほど制限時間が加速！', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                    const SizedBox(height: 16),
+                    
+                    // 📊 全難易度ハイスコアボード
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.emoji_events, color: Colors.amber, size: 20),
+                              SizedBox(width: 4),
+                              Text('現在の最高記録', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            ],
+                          ),
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              Text('簡単(1桁): $_highScoreEasy問', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              Text('普通(2桁): $_highScoreNormal問', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              Text('難しい(3桁): $_highScoreHard問', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    const Text('計算の桁数（難易度）を選択', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: _difficulties.map((diff) {
+                        String sub = diff == '簡単' ? ' (1桁)' : diff == '普通' ? ' (2桁)' : ' (3桁)';
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ChoiceChip(
+                            label: Text(diff + sub),
+                            selected: _mathDifficulty == diff,
+                            selectedColor: Colors.orange.shade200,
+                            onSelected: (selected) {
+                              if (selected) setState(() => _mathDifficulty = diff);
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton.icon(
+                        onPressed: _startMathMarathon,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange.shade700,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.play_arrow),
+                        label: Text('計算マラソン ($_mathDifficulty) スタート', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  '${_textController.text.trim().isNotEmpty ? _textController.text.trim() : _selectedTheme} AIクイズを生成！',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
               ),
             ),
+            
           ],
         ),
       ),
@@ -376,7 +399,7 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
 }
 
 // =================================================================
-// 2. クイズプレイ画面
+// 2. クイズプレイ画面（変更なし、そのまま利用可能）
 // =================================================================
 class QuizPlayScreen extends StatefulWidget {
   final List<QuizModel> quizList;
@@ -459,7 +482,6 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
     });
   }
 
-  // 🔥 ゲームオーバー時に、その難易度専用のキーでハイスコア判定・保存を行う
   Future<void> _handleGameOver() async {
     setState(() {
       _isGameOver = true;
@@ -467,7 +489,6 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
 
     if (widget.isMathMarathon) {
       final prefs = await SharedPreferences.getInstance();
-      // 難易度ごとに個別の保存キー（例: math_high_score_簡単）を作成
       String scoreKey = 'math_high_score_${widget.marathonDifficulty}';
       int currentHighScore = prefs.getInt(scoreKey) ?? 0;
       
