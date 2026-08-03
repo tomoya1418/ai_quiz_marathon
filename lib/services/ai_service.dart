@@ -31,7 +31,7 @@ class QuizModel {
 
 class AiService {
   // ※ 取得した実際のGemini APIキーをここに貼り付けてください。
-  static const String _apiKey = 'ここに取得したGeminiのAPIキーを入力';
+  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
 
   /// お題と難易度を受け取り、10問のクイズを生成して返す関数
   Future<List<QuizModel>> generateAIQuizzes({

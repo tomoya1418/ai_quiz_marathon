@@ -35,13 +35,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # 5. APK（実機テスト用）のビルド
+      # 5. APK（実機テスト用）のビルド（末尾に--dart-defineを追加）
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
 
-      # 6. AAB（Google Playストア提出用）のビルド
+      # 6. AAB（Google Playストア提出用）のビルド（末尾に--dart-defineを追加）
       - name: Build AppBundle (AAB)
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
 
       # 7. ビルドされた成果物（Artifacts）をGitHub上に保存し、ダウンロード可能にする
       - name: Upload APK
