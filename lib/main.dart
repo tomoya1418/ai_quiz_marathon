@@ -178,17 +178,17 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
       setState(() {
         _isLoading = false;
       });
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('エラー'),
-          //content: const Text('クイズの生成に失敗しました。APIキーの設定や通信環境を確認してください。\n※計算専門マラソンは通信なしで遊べます。'),
-          content: const Text('{e.toString()}'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            )
+    showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('APIエラーが発生しました'),
+      // 👇 必ず末尾に「()」をつけてメソッドを実行してください
+      content: Text('【エラー内容】\n${e.toString()}\n\nAPIキーの設定や通信環境を確認してください。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('OK'),
+        )
           ],
         ),
       );
