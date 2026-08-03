@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 🔥 追加
 import 'services/ai_service.dart';
 
 void main() {
@@ -13,7 +14,7 @@ class QuizApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AIクイズマラソン',
+      title: 'AIクイズ＆計算マラソン',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
@@ -25,7 +26,7 @@ class QuizApp extends StatelessWidget {
 }
 
 // =================================================================
-// 1. トップ画面（お題選択・難易度設定・計算マラソン入り口）
+// 1. トップ画面（最高記録の表示機能を追加）
 // =================================================================
 class QuizTopScreen extends StatefulWidget {
   const QuizTopScreen({super.key});
@@ -41,70 +42,84 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
   String _selectedTheme = '国語';
   String _selectedDifficulty = '普通';
   bool _isLoading = false;
+  int _highScore = 0; // 🔥 最高記録を保持する変数
 
   final List<String> _subjects = ['国語', '算数', '理科', '社会', '英語'];
   final List<String> _difficulties = ['簡単', '普通', '難しい'];
 
-  // 🔥 【新規】APIを使わず、プログラムの乱数だけで計算クイズを10問自動生成する関数
+  @override
+  void initState() {
+    super.initState();
+    _loadHighScore(); // 🔥 画面が開いたときに最高記録を読み込む
+  }
+
+  // 🔥 デバイスから最高記録を読み込む関数
+  Future<void> _loadHighScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _highScore = prefs.getInt('math_high_score') ?? 0;
+    });
+  }
+
+  // 🔥 計算専門マラソン起動関数（無限対応版）
+  // プレイ画面側で次々に生成するため、ここでは最初の数問だけ作って渡します
   void _startMathMarathon() {
-    final random = Random();
-    List<QuizModel> mathQuizzes = [];
-
-    for (int i = 0; i < 10; i++) {
-      // 1〜50のランダムな数字を2つ生成
-      int num1 = random.nextInt(50) + 1;
-      int num2 = random.nextInt(50) + 1;
-      
-      // 足し算か引き算かをランダムで決定
-      bool isAddition = random.nextBool();
-
-      // 🔥【修正】引き算のときは、必ず num1 が大きくなるように入れ替える
-      if (!isAddition && num1 < num2) {
-        int temp = num1;
-        num1 = num2;
-        num2 = temp;
-      }
-
-      String questionText = isAddition ? '$num1 + $num2 = ?' : '$num1 - $num2 = ?';
-      int correctAnswerVal = isAddition ? (num1 + num2) : (num1 - num2);
-
-      // 誤答択（ダミー選択肢）を3つ作成（正解と被らないようにする）
-      Set<int> wrongAnswers = {};
-      while (wrongAnswers.length < 3) {
-        // 正解の数字の周辺からランダムに散らす
-        int diff = random.nextInt(20) - 10; // -10 〜 +9
-        int wrongVal = correctAnswerVal + diff;
-        if (wrongVal != correctAnswerVal) {
-          wrongAnswers.add(wrongVal);
-        }
-      }
-
-      // 選択肢のリスト（String型）を組み立てる
-      List<String> choices = [
-        correctAnswerVal.toString(),
-        ...wrongAnswers.map((e) => e.toString())
-      ];
-
-      // クイズモデルに変換してリストに追加
-      mathQuizzes.add(QuizModel(
-        question: questionText,
-        choices: choices,
-        correctAnswer: correctAnswerVal.toString(),
-        category: '計算専門',
-        questionType: 'four_choices', // 🔥 ここを追加！
-      ));
+    List<QuizModel> initialQuizzes = [];
+    for (int i = 0; i < 3; i++) {
+      initialQuizzes.add(_generateSingleMathQuiz());
     }
 
-    // 計算クイズデータを持って、直接プレイ画面へ遷移（API通信は一切発生しない）
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => QuizPlayScreen(quizList: mathQuizzes),
+        builder: (context) => QuizPlayScreen(
+          quizList: initialQuizzes,
+          isMathMarathon: true, // 🔥 計算マラソンフラグをON
+        ),
       ),
+    ).then((_) => _loadHighScore()); // 🔥 ゲームから戻ってきたら最高記録を再読み込みして更新
+  }
+
+  // 🔥 単発の計算問題をランダム生成する共通ロジック（マイナス値回避）
+  static QuizModel _generateSingleMathQuiz() {
+    final random = Random();
+    int num1 = random.nextInt(50) + 1;
+    int num2 = random.nextInt(50) + 1;
+    bool isAddition = random.nextBool();
+    
+    if (!isAddition && num1 < num2) {
+      int temp = num1;
+      num1 = num2;
+      num2 = temp;
+    }
+
+    String questionText = isAddition ? '$num1 + $num2 = ?' : '$num1 - $num2 = ?';
+    int correctAnswerVal = isAddition ? (num1 + num2) : (num1 - num2);
+
+    Set<int> wrongAnswers = {};
+    while (wrongAnswers.length < 3) {
+      int diff = random.nextInt(20) - 10;
+      int wrongVal = correctAnswerVal + diff;
+      if (wrongVal != correctAnswerVal) {
+        wrongAnswers.add(wrongVal);
+      }
+    }
+
+    List<String> choices = [
+      correctAnswerVal.toString(),
+      ...wrongAnswers.map((e) => e.toString())
+    ];
+
+    return QuizModel(
+      question: questionText,
+      choices: choices,
+      correctAnswer: correctAnswerVal.toString(),
+      category: '計算専門',
+      questionType: 'four_choices',
     );
   }
 
-  // AIクイズの生成と遷移の処理（こちらはGemini APIを使用）
+  // AIクイズの生成と遷移の処理（こちらは10問限定のまま）
   Future<void> _startAiQuiz() async {
     final finalTheme = _textController.text.trim().isNotEmpty 
         ? _textController.text.trim() 
@@ -129,7 +144,10 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => QuizPlayScreen(quizList: quizzes),
+          builder: (context) => QuizPlayScreen(
+            quizList: quizzes,
+            isMathMarathon: false,
+          ),
         ),
       );
 
@@ -186,9 +204,31 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔥 【追加】通信もAPIも一切使わない「計算専門マラソン」の起動ボタン
             const Text('【通信なしで遊ぶ】', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
             const SizedBox(height: 8),
+            
+            // 🔥 【追加】現在の最高記録メーター
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color:Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.emoji_events, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Text(
+                    '計算マラソン最高記録: $_highScore 問連続正解！',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -200,13 +240,13 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.calculate),
-                label: const Text('計算専門マラソン スタート！', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                label: const Text('計算マラソン スタート！', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ),
             ),
             
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24.0),
-              child: Divider(), // 区切り線
+              child: Divider(),
             ),
 
             const Text('【AIクイズに挑戦する】', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
@@ -265,7 +305,6 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
               }).toList(),
             ),
             const SizedBox(height: 48),
-            // AIクイズ用のスタートボタン
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -290,22 +329,25 @@ class _QuizTopScreenState extends State<QuizTopScreen> {
 }
 
 // =================================================================
-// 2. 4択クイズ プレイ画面（10秒タイマー・シャッフル機能付き）
+// 2. クイズプレイ画面（無限生成＆ハイスコア保存ロジック内蔵）
 // =================================================================
 class QuizPlayScreen extends StatefulWidget {
   final List<QuizModel> quizList;
+  final bool isMathMarathon; // 🔥 計算マラソンかどうかの判定フラグ
 
-  const QuizPlayScreen({super.key, required this.quizList});
+  const QuizPlayScreen({super.key, required this.quizList, required this.isMathMarathon});
 
   @override
   State<QuizPlayScreen> createState() => _QuizPlayScreenState();
 }
 
 class _QuizPlayScreenState extends State<QuizPlayScreen> {
+  late List<QuizModel> _dynamicQuizList; // 動的に問題を追加していくためのリスト
   int _currentIndex = 0;
   int _score = 0;
   bool _isGameOver = false;
   bool _isGameClear = false;
+  bool _isNewHighScore = false; // 🔥 新記録達成フラグ
   
   Timer? _timer;
   final double _maxTime = 10.0;
@@ -316,11 +358,13 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
   @override
   void initState() {
     super.initState();
+    _dynamicQuizList = List<QuizModel>.from(widget.quizList);
     _setupQuestion();
   }
 
   void _setupQuestion() {
-    if (_currentIndex >= widget.quizList.length) {
+    // 🔥 【重要】計算マラソンでなければ（AIクイズなら）、10問でゲームクリア判定
+    if (!widget.isMathMarathon && _currentIndex >= _dynamicQuizList.length) {
       setState(() {
         _isGameClear = true;
       });
@@ -328,7 +372,12 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
       return;
     }
 
-    final currentQuiz = widget.quizList[_currentIndex];
+    // 🔥 計算マラソンの場合、手前の問題に差し掛かったら次の問題を自動で無限ケツに追加
+    if (widget.isMathMarathon && _currentIndex >= _dynamicQuizList.length - 1) {
+      _dynamicQuizList.add(_QuizTopScreenState._generateSingleMathQuiz());
+    }
+
+    final currentQuiz = _dynamicQuizList[_currentIndex];
     
     setState(() {
       _shuffledChoices = List<String>.from(currentQuiz.choices)..shuffle();
@@ -344,7 +393,7 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
       setState(() {
         if (_remainingTime <= 0.1) {
           _timer?.cancel();
-          _isGameOver = true;
+          _handleGameOver(); // 🔥 時間切れもゲームオーバー処理へ
         } else {
           _remainingTime -= 0.1;
         }
@@ -352,18 +401,36 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
     });
   }
 
+  // 🔥 ゲームオーバー時のスコア保存処理
+  Future<void> _handleGameOver() async {
+    setState(() {
+      _isGameOver = true;
+    });
+
+    if (widget.isMathMarathon) {
+      final prefs = await SharedPreferences.getInstance();
+      int currentHighScore = prefs.getInt('math_high_score') ?? 0;
+      
+      // 今のスコアがハイスコアを上回っていたら保存
+      if (_score > currentHighScore) {
+        await prefs.setInt('math_high_score', _score);
+        setState(() {
+          _isNewHighScore = true;
+        });
+      }
+    }
+  }
+
   void _answerQuestion(String selectedChoice) {
     _timer?.cancel();
-    final currentQuiz = widget.quizList[_currentIndex];
+    final currentQuiz = _dynamicQuizList[_currentIndex];
 
     if (selectedChoice == currentQuiz.correctAnswer) {
       _score++;
       _currentIndex++;
-      _setupQuestion();
+      _setupQuestion(); // 正解なら無限に次へ
     } else {
-      setState(() {
-        _isGameOver = true;
-      });
+      _handleGameOver(); // 🔥 間違えたら即ゲームオーバー＆記録判定
     }
   }
 
@@ -378,11 +445,11 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
     if (_isGameOver) return _buildGameOverScreen();
     if (_isGameClear) return _buildGameClearScreen();
 
-    final currentQuiz = widget.quizList[_currentIndex];
+    final currentQuiz = _dynamicQuizList[_currentIndex];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('第 ${_currentIndex + 1} 問 / 全 ${widget.quizList.length} 問'),
+        title: Text(widget.isMathMarathon ? '計算マラソン 挑戦中' : '第 ${_currentIndex + 1} 問 / 全 ${widget.quizList.length} 問'),
         automaticallyImplyLeading: false,
       ),
       body: Column(
@@ -392,7 +459,7 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('スコア: $_score', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text('現在のスコア: $_score', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Text('ジャンル: ${currentQuiz.category}', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
               ],
             ),
@@ -407,7 +474,7 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Text(
               currentQuiz.question,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold), // 計算を見やすく大きく
               textAlign: TextAlign.center,
             ),
           ),
@@ -429,7 +496,7 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         side: BorderSide(color: Colors.teal.shade200),
                       ),
-                      child: Text(choice, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                      child: Text(choice, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
                     ),
                   ),
                 );
@@ -447,11 +514,19 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.sentiment_very_dissatisfied, size: 80, color: Colors.red),
+            // 🔥 新記録なら金メダル、通常なら残念顔アイコン
+            Icon(
+              _isNewHighScore ? Icons.emoji_events : Icons.sentiment_very_dissatisfied, 
+              size: 90, 
+              color: _isNewHighScore ? Colors.amber : Colors.red
+            ),
             const SizedBox(height: 16),
-            const Text('ゲームオーバー！', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.red)),
-            const SizedBox(height: 8),
-            Text('記録: $_score 問正解', style: const TextStyle(fontSize: 20)),
+            Text(
+              _isNewHighScore ? '✨ 新記録達成！ ✨' : 'ゲームオーバー！', 
+              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: _isNewHighScore ? Colors.amber.shade800 : Colors.red)
+            ),
+            const SizedBox(height: 12),
+            Text('今回の記録: $_score 問連続正解', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 40),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),

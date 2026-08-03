@@ -30,7 +30,7 @@ class QuizModel {
 }
 
 class AiService {
-  // ※ 取得した実際のGemini APIキーをここに貼り付けてください。
+  // ⭕ コマンドの引数からAPIキー（文字列）を正しく受け取る
   static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
 
   /// お題と難易度を受け取り、10問のクイズを生成して返す関数
@@ -38,11 +38,11 @@ class AiService {
     required String theme,
     required String difficulty,
   }) async {
-    // 1. 使用するモデルの指定（軽量・高速な gemini-2.5-flash を推奨）
+    // 1. 使用するモデルの指定と、受け取った文字列の _apiKey を設定
     final model = GenerativeModel(
       model: 'gemini-3.6-flash',
-      apiKey: _apiKey,
-      // 2. バージョン互換性に基づき `generationConfig` を指定
+      apiKey: _apiKey, // 👈 ここにString型のキーが入ります
+      // 2. 構造化出力（JSON）の設定
       generationConfig: GenerationConfig(
         responseMimeType: 'application/json',
         responseSchema: Schema.array(
@@ -94,7 +94,7 @@ class AiService {
 
     } catch (e) {
       print('Gemini APIエラー: $e');
-      rethrow; // エラーを上位（画面側）に受け渡してダイアログを表示させる
+      rethrow; // エラーを上位（画面側）に引き渡してダイアログを表示させる
     }
   }
 }
